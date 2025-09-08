@@ -1,0 +1,26 @@
+# Ignore the summaries folder
+summaries/
+
+# Ignore Word documents (optional — remove if you want to track .docx)
+*.docx
+*.txt
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment folders
+env/
+venv/
+.venv/
+.env
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# OS-specific junk
+.DS_Store
+Thumbs.db
