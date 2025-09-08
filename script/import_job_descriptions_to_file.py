@@ -34,7 +34,7 @@ ROLE_KEYWORDS = [
 PREFERRED_TITLES = {
     "software developer","software engineer","data analyst","data scientist",
     "backend developer","frontend developer","full stack developer","full stack engineer",
-    "web developer","application developer"
+    "web developer","application developer", "cloud developer"
 }
 BANNED_TITLES = {
     "seniority","seniority level","employment","employment type",
