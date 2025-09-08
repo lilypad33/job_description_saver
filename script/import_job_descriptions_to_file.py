@@ -50,7 +50,9 @@ PREFERRED_TITLES = {
     "full stack developer",
     "full stack engineer",
     "web developer",
-    "application developer"
+    "application developer",
+    "cloud infrastructure engineer",
+    "cloud developer"
 }
 
 COMMON_FILLER_START = re.compile(r"^(the|a|an|our|we|i)\b", re.IGNORECASE)
@@ -112,12 +114,21 @@ LEADING_JUNK = re.compile(r"^(company|employer|organization|org)\s*[:\-–]\s*",
 NON_NAME_VERBS = re.compile(r"\b(is|are|seeking|hiring|looking|need|needs|join|build|help|drive|lead)\b", re.IGNORECASE)
 
 def clean_company(name):
+    # Remove emails/URLs and trademark symbols
     name = EMAIL_OR_URL.sub("", name)
     name = name.replace("®", "").replace("™", "").replace("©", "")
     name = LEADING_JUNK.sub("", name).strip()
+    # Remove LinkedIn artifacts
+    name = re.sub(r"\blogo\b", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\bsee jobs?\b", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\bview profile\b", "", name, flags=re.IGNORECASE)
+    # Cut at separators if likely description follows
     name = re.sub(r"\s*[-–—:|]\s+[a-z].*", "", name)
+    # Remove trailing department-like words
     name = TRAILING_DEPT.sub("", name).strip()
+    # Collapse spaces and punctuation at ends
     name = re.sub(r"\s+", " ", name).strip(" \t-–—:,.")
+    # Keep only the first chunk before commas/pipes if multiple
     name = re.split(r"[|,/]", name)[0].strip()
     return name
 
