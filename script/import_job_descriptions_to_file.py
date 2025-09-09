@@ -70,11 +70,19 @@ def looks_title_cased(text):
     return caps >= max(1, int(0.6 * len(words)))
 
 def is_probable_location(text):
-    text_lower = text.strip().lower()
+    """
+    Returns True if the given text looks like a location (city, state, country).
+    Designed to filter out location strings from job title or company name fields.
+    """
+
+    text = text.strip()
+    text_lower = text.lower()
 
     # US state abbreviations
     state_abbr = {
-        "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa","wv","wi","wy"
+        "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la",
+        "me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok",
+        "or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa","wv","wi","wy"
     }
 
     # Common country abbreviations (ISO alpha-2)
@@ -82,31 +90,39 @@ def is_probable_location(text):
         "us","uk","ca","au","nz","de","fr","es","it","nl","se","no","fi","ch","jp","cn","in","br","mx"
     }
 
-    # Common location words
-    location_keywords = {
-        "city","town","village","county","province","state","region",
-        "united states","usa","canada","australia","united kingdom","england",
-        "scotland","wales","ireland","germany","france","spain","italy",
-        "netherlands","sweden","norway","denmark","finland","switzerland",
-        "japan","china","india","brazil","mexico"
+    # Full US state names
+    state_names = {
+        "alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware",
+        "florida","georgia","hawaii","idaho","illinois","indiana","iowa","kansas","kentucky",
+        "louisiana","maine","maryland","massachusetts","michigan","minnesota","mississippi",
+        "missouri","montana","nebraska","nevada","new hampshire","new jersey","new mexico",
+        "new york","north carolina","north dakota","ohio","oklahoma","oregon","pennsylvania",
+        "rhode island","south carolina","south dakota","tennessee","texas","utah","vermont",
+        "virginia","washington","west virginia","wisconsin","wyoming"
     }
 
-    # Match "City, ST" or "City, CC"
-    if re.match(r"^[A-Z][A-Za-z\s]+,\s*[A-Z]{2}$", text.strip()):
-        abbr = text.strip().split(",")[-1].strip().lower()
-        if abbr in state_abbr or abbr in country_abbr:
-            return True
+    # Common country names
+    country_names = {
+        "united states","usa","canada","australia","united kingdom","england","scotland","wales",
+        "ireland","germany","france","spain","italy","netherlands","sweden","norway","denmark",
+        "finland","switzerland","japan","china","india","brazil","mexico"
+    }
 
-    # Match "City, StateName" or "City, CountryName"
-    if re.match(r"^[A-Z][A-Za-z\s]+,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$", text.strip()):
-        return True
+    # --- Strong comma rule ---
+    if "," in text:
+        parts = [p.strip().lower() for p in text.split(",", 1)]
+        if len(parts) == 2:
+            second = parts[1]
+            if second in state_abbr or second in country_abbr or second in state_names or second in country_names:
+                return True
 
-    # If all words are location terms or abbreviations
+    # --- All-words rule ---
     words = [w.strip(",.") for w in text_lower.split()]
-    if all(w in location_keywords or w in state_abbr or w in country_abbr for w in words):
+    if all(w in state_abbr or w in country_abbr or w in state_names or w in country_names for w in words):
         return True
 
     return False
+
 
 def clean_title(title):
     stop_phrases = [
@@ -255,6 +271,9 @@ def add_company_candidate(val, score, why):
     cleaned = clean_company(val)
     if not cleaned:
         return
+    if is_probable_location(cleaned):
+        debug(f"Rejected company candidate '{cleaned}' (looks like location) from {why}")
+        return
     company_candidates.append((cleaned, score, why))
     debug(f"Company candidate (+{score}): '{cleaned}' via {why}")
 
@@ -294,6 +313,8 @@ def is_probable_company(name):
     if COMMON_FILLER_START.match(name):
         return False
     if NON_NAME_VERBS.search(name):
+        return False
+    if is_probable_location(name):
         return False
     words = name.split()
     if len(words) > 6:
