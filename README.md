@@ -43,7 +43,7 @@ This script extracts job titles and company names from copied job descriptions a
    Highlight and copy the full job description from any source (LinkedIn, job board, email, etc.).
 
 2. **Run the script**  
-   Double-click `run.bat`. The script will:
+   Double-click `script\run_job_descriptions.bat`. The script will:
    - Automatically detect the job title and company name
    - Ask you to confirm or correct them
    - Prompt you to choose a file format (`txt` or `docx`)
@@ -104,7 +104,7 @@ The script is written in Python and should work on macOS or Linux with minimal c
    python your_script.py
    ```
 
-> If you'd like a shell script version (`run.sh`), feel free to request it.
+> If you'd like a shell script version (`script\run_job_descriptions.sh`), feel free to request it.
 
 ---
 
