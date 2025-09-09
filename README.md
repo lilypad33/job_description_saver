@@ -111,3 +111,7 @@ The script is written in Python and should work on macOS or Linux with minimal c
 ## 📬 Feedback & Contributions
 
 If you’d like to contribute, request Mac/Linux support, or suggest improvements, feel free to reach out. This project is designed to be simple, smart, and easy to extend.
+
+## 📄 License
+
+This project is licensed under the MIT License — feel free to use, modify, and share it. See the [LICENSE](LICENSE) file for details.
