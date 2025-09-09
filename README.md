@@ -20,7 +20,7 @@ This script extracts job titles and company names from copied job descriptions a
    ✅ Be sure to check “Add Python to PATH” during installation.
 
 2. **Install Dependencies**  
-   Run the included `setup_dependencies.bat` file to install required Python packages:
+   Run the included `script\setup_dependencies.bat` file to install required Python packages:
    ```bat
    @echo off
    python -m pip install --upgrade pip
