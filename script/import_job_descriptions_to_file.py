@@ -78,16 +78,35 @@ def clean_title(title):
     ]
     for pat in stop_phrases:
         title = re.sub(pat, "", title, flags=re.IGNORECASE)
+
+    # Remove trailing location/company fragments
+    title = re.sub(r"\s+(at|with|for|in)\s+.+$", "", title, flags=re.IGNORECASE)
+
+    # Remove trailing filler like "to join our team"
+    title = re.sub(r"\s+to\s+join.*$", "", title, flags=re.IGNORECASE)
+
+    # Filter out generic non-title phrases
+    generic_phrases = {
+        "member of the team", "part of the team", "part of our team",
+        "member of our company", "part of the company", "team member"
+    }
+    if title.strip().lower() in generic_phrases:
+        return ""
+
     # Cut if punctuation followed by lowercase descriptive text
     title = re.sub(r"\s*[-–—:]\s+[a-z].*", "", title)
+
     # Remove leading labels
     title = re.sub(r"^(Hiring|Role|Position|Title)\s*[:\-–]\s*", "", title, flags=re.IGNORECASE)
+
     # Cut at sentence punctuation if long
     title = re.split(r"[.|;]\s", title)[0]
+
     # Limit words
     words = title.split()
     if len(words) > 8:
         title = " ".join(words[:8])
+
     return title.strip(" \t-–—:,.").replace("  ", " ")
 
 def clean_company(name):
@@ -129,6 +148,20 @@ if m: add_title_candidate(m.group(1), 6, "label")
 # Looking for a/an ...
 m = re.search(r"(?i)looking\s+for\s+a[n]?\s+([^\n]+)", job_description)
 if m: add_title_candidate(m.group(1), 5, "looking for a/an")
+
+# "As a/an ..." pattern ...
+m = re.search(r"(?i)\bas\s+a[n]?\s+([^\n,]+)", job_description)
+if m:
+    candidate = m.group(1).strip()
+
+    # Only keep if it starts with a capital letter and isn't a generic filler phrase
+    generic_phrases = {
+        "member of the team", "part of the team", "part of our team",
+        "member of our company", "part of the company", "team member"
+    }
+    if candidate and candidate[0].isupper() and candidate.lower() not in generic_phrases:
+        add_title_candidate(candidate, 5, "as a/an")
+
 
 # Early lines: separators and title-cased
 for ln in job_description.splitlines()[:5]:
