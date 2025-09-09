@@ -123,24 +123,69 @@ def is_probable_location(text):
 
     return False
 
+def find_company_in_next_lines(lines, start_index, max_ahead=5):
+    for i in range(start_index + 1, min(start_index + 1 + max_ahead, len(lines))):
+        ln = lines[i].strip()
+        if not ln:
+            continue
+        # Match "Company is ..." or "About Company"
+        m = re.match(r"^([A-Z][\w& ]+?)\s+is\s+.+$", ln)
+        if m and not is_probable_location(m.group(1)):
+            return m.group(1).strip()
+    return None
+
+def extract_company_and_title_from_line(line):
+    # 1. Company is hiring a Job Title
+    m = re.match(r"^([A-Z][\w& ]+?)\s+is\s+hiring\s+(?:an?\s+|for\s+an?\s+)?(.+)$", line, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).strip(), m.group(2).strip(), False
+
+    # 2. Company is seeking a Job Title
+    m = re.match(r"^([A-Z][\w& ]+?)\s+is\s+seeking\s+(?:an?\s+)?(.+)$", line, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).strip(), m.group(2).strip(), False
+
+    # 3. Company is a ... (no title)
+    m = re.match(r"^([A-Z][\w& ]+?)\s+is\s+a\s+.+$", line, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).strip(), None, False
+
+    # 4. Join Company as Job Title
+    m = re.match(r"^Join\s+([A-Z][\w& ]+?)\s+as\s+(.+)$", line, flags=re.IGNORECASE)
+    if m:
+        company = m.group(1).strip()
+        title = m.group(2).strip()
+        if company.lower() in {"us", "our", "our team"}:
+            return None, title, True  # Lookahead needed
+        return company, title, False
+
+    return None, None, False
 
 def clean_title(title):
+    # --- Remove known stop phrases ---
     stop_phrases = [
         r"\s+who\s+is\s+.*", r"\s+that\s+is\s+.*", r"\s+with\s+experience\s+.*",
         r"\s+to\s+join\s+our\s+team.*", r"\s+to\s+help\s+.*", r"\s+as\s+part\s+of\s+.*",
         r"\s+needed\s+.*", r"\s+ASAP.*", r"\s+immediately.*", r"\s+based\s+in\s+.*",
-        r"\s+in\s+[^/\\,:;–—-]+$"
+        r"\s+in\s+[^/\\,:;–—-]+$",
+        r"\s+to\s+work\s+onsite.*",
+        r"\s+to\s+support\s+.*",
+        r"\s+to\s+build\s+.*",
+        r"\s+to\s+develop\s+.*",
+        r"\s+to\s+design\s+.*"
     ]
     for pat in stop_phrases:
         title = re.sub(pat, "", title, flags=re.IGNORECASE)
 
-    # Remove trailing location/company fragments
+    # --- Remove trailing location/company fragments ---
     title = re.sub(r"\s+(at|with|for|in)\s+.+$", "", title, flags=re.IGNORECASE)
+    title = re.sub(r",\s*[A-Za-z\s]+,\s*[A-Z]{2}$", "", title)       # , City, ST
+    title = re.sub(r",\s*[A-Za-z\s]+,\s*[A-Za-z]+$", "", title)      # , City, Country
 
-    # Remove trailing filler like "to join our team"
+    # --- Remove trailing filler like "to join our team" ---
     title = re.sub(r"\s+to\s+join.*$", "", title, flags=re.IGNORECASE)
 
-    # Filter out generic non-title phrases
+    # --- Filter out generic non-title phrases ---
     generic_phrases = {
         "member of the team", "part of the team", "part of our team",
         "member of our company", "part of the company", "team member"
@@ -148,21 +193,32 @@ def clean_title(title):
     if title.strip().lower() in generic_phrases:
         return ""
 
-    # Cut if punctuation followed by lowercase descriptive text
+    # --- Cut if punctuation followed by lowercase descriptive text ---
     title = re.sub(r"\s*[-–—:]\s+[a-z].*", "", title)
 
-    # Remove leading labels
+    # --- Remove leading labels ---
     title = re.sub(r"^(Hiring|Role|Position|Title)\s*[:\-–]\s*", "", title, flags=re.IGNORECASE)
 
-    # Cut at sentence punctuation if long
+    # --- Cut at sentence punctuation if long ---
     title = re.split(r"[.|;]\s", title)[0]
 
-    # Limit words
+    # --- Limit words ---
     words = title.split()
     if len(words) > 8:
         title = " ".join(words[:8])
 
-    return title.strip(" \t-–—:,.").replace("  ", " ")
+    # --- Final cleanup ---
+    title = title.strip(" \t-–—:,.").replace("  ", " ")
+
+    # --- Extra: strip trailing location if still present ---
+    parts = title.split()
+    for cut in range(len(parts), 0, -1):
+        if is_probable_location(" ".join(parts[cut-1:])):
+            title = " ".join(parts[:cut-1])
+            break
+
+    return title
+
 
 def clean_company(name):
     name = EMAIL_OR_URL.sub("", name)
@@ -196,6 +252,20 @@ def add_title_candidate(val, score, why):
     title_candidates.append((val, score, why))
     debug(f"Title candidate (+{score}): '{val}' via {why}")
 
+# === COMPANY CANDIDATES ===
+company_candidates = []
+
+def add_company_candidate(val, score, why):
+    cleaned = clean_company(val)
+    if not cleaned:
+        return
+    if is_probable_location(cleaned):
+        debug(f"Rejected company candidate '{cleaned}' (looks like location) from {why}")
+        return
+    company_candidates.append((cleaned, score, why))
+    debug(f"Company candidate (+{score}): '{cleaned}' via {why}")
+
+
 # Explicit labels
 m = re.search(r"(?:Job\s*Title|Position|Role|Title)\s*[:\-–]\s*([^\n]+)", job_description, flags=re.IGNORECASE)
 if m: add_title_candidate(m.group(1), 6, "label")
@@ -219,10 +289,14 @@ if m:
 
 
 # Early lines: separators and title-cased
-for ln in job_description.splitlines()[:5]:
+lines = job_description.splitlines()
+
+for idx, ln in enumerate(lines[:5]):
     ln = ln.strip()
     if not ln:
         continue
+
+    # Separator split logic stays the same
     for sep in [" - ", " – ", " — ", ":", " | "]:
         if sep in ln:
             left, right = ln.split(sep, 1)
@@ -230,8 +304,28 @@ for ln in job_description.splitlines()[:5]:
                 add_title_candidate(left, 4, f"before '{sep.strip()}'")
             if right and right[0].isupper():
                 add_title_candidate(right, 3, f"after '{sep.strip()}'")
-    if ln and ln[0].isupper() and looks_title_cased(ln):
-        add_title_candidate(ln, 3, "title-cased line")
+
+    # Title-cased line detection with lookahead
+    if ln and ln[0].isupper() and looks_title_cased(ln) and not is_probable_location(ln):
+        company, job_title, needs_lookahead = extract_company_and_title_from_line(ln)
+
+        if needs_lookahead:
+            found_company = find_company_in_next_lines(lines, idx)
+            if found_company:
+                add_company_candidate(found_company, 4, "lookahead after 'Join us'")
+        
+        if company:
+            add_company_candidate(company, 4, "title-cased line (extracted)")
+
+        if job_title:
+            cleaned_title = clean_title(job_title)
+            if cleaned_title and not is_probable_location(cleaned_title):
+                add_title_candidate(cleaned_title, 3, "title-cased line (extracted)")
+        else:
+            cleaned_line = clean_title(ln)
+            if cleaned_line and not is_probable_location(cleaned_line):
+                add_title_candidate(cleaned_line, 3, "title-cased line")
+
 
 # Title @/at Company
 m = re.search(r"^([A-Z][A-Za-z0-9/&\-\s]+?)\s*@\s*[A-Z][^\n]+", job_description, flags=re.MULTILINE)
@@ -264,19 +358,6 @@ def pick_best_title():
 
 best_title = pick_best_title()
 
-# === COMPANY CANDIDATES ===
-company_candidates = []
-
-def add_company_candidate(val, score, why):
-    cleaned = clean_company(val)
-    if not cleaned:
-        return
-    if is_probable_location(cleaned):
-        debug(f"Rejected company candidate '{cleaned}' (looks like location) from {why}")
-        return
-    company_candidates.append((cleaned, score, why))
-    debug(f"Company candidate (+{score}): '{cleaned}' via {why}")
-
 # Explicit labels
 m = re.search(r"(?:Company|Employer|Organization|Hiring\s*Organization)\s*[:\-–]\s*([^\n]+)", job_description, flags=re.IGNORECASE)
 if m: add_company_candidate(m.group(1), 7, "label")
@@ -302,7 +383,7 @@ for ln in job_description.splitlines()[:8]:
     ln = ln.strip()
     if not ln:
         continue
-    if not NON_NAME_VERBS.search(ln) and looks_title_cased(ln) and not has_role_keyword(ln):
+    if not NON_NAME_VERBS.search(ln) and looks_title_cased(ln) and not has_role_keyword(ln) and not is_probable_location(ln):
         add_company_candidate(ln, 3, "proper-noun line")
 
 def is_probable_company(name):
