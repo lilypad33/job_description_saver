@@ -69,6 +69,45 @@ def looks_title_cased(text):
             caps += 1
     return caps >= max(1, int(0.6 * len(words)))
 
+def is_probable_location(text):
+    text_lower = text.strip().lower()
+
+    # US state abbreviations
+    state_abbr = {
+        "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa","wv","wi","wy"
+    }
+
+    # Common country abbreviations (ISO alpha-2)
+    country_abbr = {
+        "us","uk","ca","au","nz","de","fr","es","it","nl","se","no","fi","ch","jp","cn","in","br","mx"
+    }
+
+    # Common location words
+    location_keywords = {
+        "city","town","village","county","province","state","region",
+        "united states","usa","canada","australia","united kingdom","england",
+        "scotland","wales","ireland","germany","france","spain","italy",
+        "netherlands","sweden","norway","denmark","finland","switzerland",
+        "japan","china","india","brazil","mexico"
+    }
+
+    # Match "City, ST" or "City, CC"
+    if re.match(r"^[A-Z][A-Za-z\s]+,\s*[A-Z]{2}$", text.strip()):
+        abbr = text.strip().split(",")[-1].strip().lower()
+        if abbr in state_abbr or abbr in country_abbr:
+            return True
+
+    # Match "City, StateName" or "City, CountryName"
+    if re.match(r"^[A-Z][A-Za-z\s]+,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$", text.strip()):
+        return True
+
+    # If all words are location terms or abbreviations
+    words = [w.strip(",.") for w in text_lower.split()]
+    if all(w in location_keywords or w in state_abbr or w in country_abbr for w in words):
+        return True
+
+    return False
+
 def clean_title(title):
     stop_phrases = [
         r"\s+who\s+is\s+.*", r"\s+that\s+is\s+.*", r"\s+with\s+experience\s+.*",
